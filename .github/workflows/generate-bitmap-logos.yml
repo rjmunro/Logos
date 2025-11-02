@@ -1,0 +1,150 @@
+name: Generate Bitmap Logos
+
+on:
+  push:
+    paths: [ '*.svg' ]  # Run on any branch when SVG files change
+  pull_request:
+    paths: [ '*.svg' ]  # Run on PRs when SVG files change
+  release:
+    types: [published]  # Run when a release is published
+  workflow_dispatch:
+    inputs:
+      resolution:
+        description: 'Output resolution (e.g., 512x512, 1024x1024, or "original" for native SVG dimensions)'
+        required: false
+        default: 'original'
+      quality:
+        description: 'JPG quality (1-100)'
+        required: false
+        default: '90'
+
+jobs:
+  convert-logos-advanced:
+    runs-on: ubuntu-latest
+    
+    env:
+      RESOLUTION: ${{ github.event.inputs.resolution || 'original' }}
+      JPG_QUALITY: ${{ github.event.inputs.quality || '90' }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install rsvg and optimization tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y librsvg2-bin optipng jpegoptim imagemagick
+        
+    - name: Create output directory
+      run: |
+        mkdir -p converted
+        
+    - name: Convert SVG files
+      run: |
+        # Define resolution setting
+        MAIN_RES="${RESOLUTION}"
+        
+        echo "Converting with resolution setting: $MAIN_RES"
+        echo "JPG quality setting: $JPG_QUALITY"
+        
+        # Find all SVG files ending with -Vector.svg
+        for svg_file in *-Vector.svg; do
+          if [ -f "$svg_file" ]; then
+            echo "Processing: $svg_file"
+            
+            # Extract base name without -Vector.svg suffix
+            base_name="${svg_file%-Vector.svg}"
+            
+            # Determine conversion parameters
+            if [ "$MAIN_RES" = "original" ]; then
+              # Query SVG dimensions
+              svg_width=$(rsvg-convert --query-width "$svg_file")
+              svg_height=$(rsvg-convert --query-height "$svg_file")
+              
+              echo "  SVG native dimensions: ${svg_width}x${svg_height}"
+              
+              # Check if we need to scale down (if either dimension > 1024)
+              if [ "$svg_width" -gt 1024 ] || [ "$svg_height" -gt 1024 ]; then
+                # Calculate scale factor to fit within 1024x1024
+                if [ "$svg_width" -gt "$svg_height" ]; then
+                  # Width is larger dimension
+                  scale_width=1024
+                  scale_height=$((svg_height * 1024 / svg_width))
+                else
+                  # Height is larger dimension  
+                  scale_height=1024
+                  scale_width=$((svg_width * 1024 / svg_height))
+                fi
+                echo "  Scaling down to: ${scale_width}x${scale_height}"
+                CONVERT_PARAMS="--width=$scale_width --height=$scale_height"
+              else
+                echo "  Using native dimensions (no scaling needed)"
+                CONVERT_PARAMS="--width=$svg_width --height=$svg_height"
+              fi
+            else
+              # Use specified resolution
+              width="${MAIN_RES%x*}"
+              height="${MAIN_RES#*x}"
+              echo "  Using specified dimensions: ${width}x${height}"
+              CONVERT_PARAMS="--width=$width --height=$height"
+            fi
+            
+            echo "  Using rsvg-convert for SVG rendering..."
+            
+            # PNG with white background (Light version)
+            rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
+            
+            # PNG with black background (Dark version)
+            rsvg-convert $CONVERT_PARAMS --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
+            
+            # PNG with alpha transparency (Alpha version)
+            rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
+            
+            # For JPG, convert from PNG using ImageMagick (just for format conversion)
+            convert "converted/${base_name}-Light.png" -quality "$JPG_QUALITY" "converted/${base_name}-Light.jpg"
+            convert "converted/${base_name}-Dark.png" -quality "$JPG_QUALITY" "converted/${base_name}-Dark.jpg"
+            
+            echo "  Completed: $base_name"
+          fi
+        done
+        
+    - name: Optimize PNG files
+      run: |
+        echo "Optimizing PNG files..."
+        find converted -name "*.png" -exec optipng -o2 {} \;
+        
+    - name: Optimize JPG files
+      run: |
+        echo "Optimizing JPG files..."
+        find converted -name "*.jpg" -exec jpegoptim --max=95 {} \;
+        
+    - name: Generate file manifest
+      run: |
+        echo "# Generated Logo Files" > MANIFEST.md
+        echo "" >> MANIFEST.md
+        echo "Generated on: $(date -u)" >> MANIFEST.md
+        echo "Resolution: $RESOLUTION" >> MANIFEST.md
+        echo "JPG Quality: $JPG_QUALITY" >> MANIFEST.md
+        echo "" >> MANIFEST.md
+        echo "## Files Created" >> MANIFEST.md
+        find converted -name "*.png" -o -name "*.jpg" | sort | sed 's/^/- /' >> MANIFEST.md
+        
+    - name: Display file sizes
+      run: |
+        echo "Generated files:"
+        find converted -type f \( -name "*.png" -o -name "*.jpg" \) -exec ls -lh {} \; | awk '{print $5, $9}' | sort -k2
+        
+    - name: Upload converted logos
+      uses: actions/upload-artifact@v4
+      with:
+        name: converted-logos
+        path: converted/
+        retention-days: 90
+        
+    - name: Upload individual files to release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: converted/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
