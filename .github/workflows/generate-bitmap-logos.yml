@@ -23,7 +23,7 @@ on:
         default: '90'
 
 jobs:
-  convert-logos-advanced:
+  convert-logos:
     runs-on: ubuntu-latest
     
     env:
@@ -61,48 +61,40 @@ jobs:
             
             # Determine conversion parameters
             if [ "$MAIN_RES" = "original" ]; then
-              # Query SVG dimensions
-              svg_width=$(rsvg-convert --query-width "$svg_file")
-              svg_height=$(rsvg-convert --query-height "$svg_file")
+              # Render at native resolution first
+              echo "  Rendering at native resolution..."
+              rsvg-convert --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
               
-              echo "  SVG native dimensions: ${svg_width}x${svg_height}"
+              # Check if too large
+              dimensions=$(identify -format "%wx%h" "converted/${base_name}-Light.png")
+              img_width=$(echo $dimensions | cut -d'x' -f1)
+              img_height=$(echo $dimensions | cut -d'x' -f2)
               
-              # Check if we need to scale down (if either dimension > 1024)
-              if [ "$svg_width" -gt 1024 ] || [ "$svg_height" -gt 1024 ]; then
-                # Calculate scale factor to fit within 1024x1024
-                if [ "$svg_width" -gt "$svg_height" ]; then
-                  # Width is larger dimension
-                  scale_width=1024
-                  scale_height=$((svg_height * 1024 / svg_width))
-                else
-                  # Height is larger dimension  
-                  scale_height=1024
-                  scale_width=$((svg_width * 1024 / svg_height))
-                fi
-                echo "  Scaling down to: ${scale_width}x${scale_height}"
-                CONVERT_PARAMS="--width=$scale_width --height=$scale_height"
-              else
-                echo "  Using native dimensions (no scaling needed)"
-                CONVERT_PARAMS="--width=$svg_width --height=$svg_height"
+              echo "  Rendered dimensions: ${img_width}x${img_height}"
+              
+              CONVERT_PARAMS=""
+              if [ "$img_width" -gt 1024 ] || [ "$img_height" -gt 1024 ]; then
+                # Too big, use 1024 limit with aspect ratio preserved
+                echo "  Too large, re-rendering with 1024px maximum..."
+                CONVERT_PARAMS="--width=1024 --height=1024 --keep-aspect-ratio"
+                rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
               fi
+              
+              # Render other versions with same parameters
+              rsvg-convert $CONVERT_PARAMS --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
+              rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             else
               # Use specified resolution
               width="${MAIN_RES%x*}"
               height="${MAIN_RES#*x}"
               echo "  Using specified dimensions: ${width}x${height}"
               CONVERT_PARAMS="--width=$width --height=$height"
+              
+              # Render all versions
+              rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
+              rsvg-convert $CONVERT_PARAMS --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
+              rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             fi
-            
-            echo "  Using rsvg-convert for SVG rendering..."
-            
-            # PNG with white background (Light version)
-            rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
-            
-            # PNG with black background (Dark version)
-            rsvg-convert $CONVERT_PARAMS --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
-            
-            # PNG with alpha transparency (Alpha version)
-            rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             
             # For JPG, convert from PNG using ImageMagick (just for format conversion)
             convert "converted/${base_name}-Light.png" -quality "$JPG_QUALITY" "converted/${base_name}-Light.jpg"
