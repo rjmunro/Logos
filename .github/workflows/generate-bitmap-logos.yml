@@ -2,9 +2,13 @@ name: Generate Bitmap Logos
 
 on:
   push:
-    paths: [ '*.svg' ]  # Run on any branch when SVG files change
+    paths:
+      - '*.svg'  # Run when SVG files change
+      - '.github/workflows/generate-bitmap-logos.yml'  # Run when this workflow changes
   pull_request:
-    paths: [ '*.svg' ]  # Run on PRs when SVG files change
+    paths:
+      - '*.svg'
+      - '.github/workflows/generate-bitmap-logos.yml'
   release:
     types: [published]  # Run when a release is published
   workflow_dispatch:
