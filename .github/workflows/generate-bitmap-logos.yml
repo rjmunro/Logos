@@ -60,8 +60,9 @@ jobs:
             base_name="${svg_file%-Vector.svg}"
             
             # Determine conversion parameters
+            CONVERT_PARAMS=""
             if [ "$MAIN_RES" = "original" ]; then
-              # Render at native resolution first
+              # Render at native resolution first to check dimensions
               echo "  Rendering at native resolution..."
               rsvg-convert --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
               
@@ -72,20 +73,12 @@ jobs:
               
               echo "  Rendered dimensions: ${img_width}x${img_height}"
               
-              CONVERT_PARAMS=""
               if [ "$img_width" -gt 1024 ] || [ "$img_height" -gt 1024 ]; then
                 # Too big, use 1024 limit with aspect ratio preserved
                 echo "  Too large, re-rendering with 1024px maximum..."
                 CONVERT_PARAMS="--width=1024 --height=1024 --keep-aspect-ratio"
                 rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
               fi
-              
-              # For dark background, use stylesheet to override colors to white
-              echo "  Creating dark version with white text stylesheet..."
-              rsvg-convert $CONVERT_PARAMS --stylesheet=white-text.css --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
-              
-              # Alpha version uses original colors
-              rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             else
               # Use specified resolution
               width="${MAIN_RES%x*}"
@@ -93,16 +86,15 @@ jobs:
               echo "  Using specified dimensions: ${width}x${height}"
               CONVERT_PARAMS="--width=$width --height=$height"
               
-              # Render light version
               rsvg-convert $CONVERT_PARAMS --background-color=white --format=png "$svg_file" > "converted/${base_name}-Light.png"
-              
-              # For dark background, use stylesheet to override colors to white
-              echo "  Creating dark version with white text stylesheet..."
-              rsvg-convert $CONVERT_PARAMS --stylesheet=white-text.css --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
-              
-              # Alpha version uses original colors
-              rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             fi
+            
+            # Render dark and alpha versions using the same parameters
+            echo "  Creating dark version with white text stylesheet..."
+            rsvg-convert $CONVERT_PARAMS --stylesheet=white-text.css --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
+            
+            echo "  Creating alpha version..."
+            rsvg-convert $CONVERT_PARAMS --format=png "$svg_file" > "converted/${base_name}-Alpha.png"
             
             # For JPG, convert from PNG using ImageMagick (just for format conversion)
             convert "converted/${base_name}-Light.png" -quality "$JPG_QUALITY" "converted/${base_name}-Light.jpg"
