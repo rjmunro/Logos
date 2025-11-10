@@ -1,0 +1,4 @@
+/* Override all fill colors to white for dark background rendering */
+* {
+    fill: white !important;
+}
