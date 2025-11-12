@@ -100,6 +100,9 @@ jobs:
             convert "converted/${base_name}-Light.png" -quality "$JPG_QUALITY" "converted/${base_name}-Light.jpg"
             convert "converted/${base_name}-Dark.png" -quality "$JPG_QUALITY" "converted/${base_name}-Dark.jpg"
             
+            # Copy original SVG to converted folder
+            cp "$svg_file" "converted/${base_name}-Vector.svg"
+            
             echo "  Completed: $base_name"
           fi
         done
@@ -123,17 +126,17 @@ jobs:
         echo "JPG Quality: $JPG_QUALITY" >> MANIFEST.md
         echo "" >> MANIFEST.md
         echo "## Files Created" >> MANIFEST.md
-        find converted -name "*.png" -o -name "*.jpg" | sort | sed 's/^/- /' >> MANIFEST.md
+        find converted -name "*.png" -o -name "*.jpg" -o -name "*.svg" | sort | sed 's/^/- /' >> MANIFEST.md
         
     - name: Display file sizes
       run: |
         echo "Generated files:"
-        find converted -type f \( -name "*.png" -o -name "*.jpg" \) -exec ls -lh {} \; | awk '{print $5, $9}' | sort -k2
+        find converted -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.svg" \) -exec ls -lh {} \; | awk '{print $5, $9}' | sort -k2
         
     - name: Upload converted logos
       uses: actions/upload-artifact@v4
       with:
-        name: converted-logos
+        name: omt-logos
         path: converted/
         retention-days: 90
         
