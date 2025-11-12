@@ -90,7 +90,7 @@ jobs:
             fi
             
             # Render dark and alpha versions using the same parameters
-            echo "  Creating dark version with white text stylesheet..."
+            echo "  Creating dark version with inverted colors..."
             rsvg-convert $CONVERT_PARAMS --stylesheet=white-text.css --background-color=black --format=png "$svg_file" > "converted/${base_name}-Dark.png"
             
             echo "  Creating alpha version..."

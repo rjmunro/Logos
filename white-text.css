@@ -1,4 +1,4 @@
-/* Override all fill colors to white for dark background rendering */
-* {
+/* Override invertible elements to white for dark background rendering */
+.invertible {
     fill: white !important;
 }
